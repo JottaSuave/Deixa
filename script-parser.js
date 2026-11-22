@@ -48,7 +48,7 @@ window.parseScriptText = function parseScriptText(raw) {
     const clean = normalize(text).replace(/\s+([.,!?;:])/g, '$1');
     if (/^(?:RÚBRICA|RUBRICA)\s*:/i.test(clean) || /^[([{].*[)\]}]$/.test(clean)) return true;
     if (/^(?:Silêncio|Escuridão|Blackout|Fim)\b/i.test(clean)) return true;
-    if (currentLine?.type === 'dialogue' && !/[—:]/.test(clean) && /^(?:Maldoror|A Mãe|O Pai|A Vizinha)\b/i.test(clean) && /\b(?:obedece|entrega|pega|desce|sobe|entra|sai|olha|fala|diz|faz|volta|abre|fecha|anda|corre|começa|termina|afaga|grita|chora|ri)\b/i.test(clean)) return true;
+    if (currentLine?.type === 'dialogue' && !/[—:]/.test(clean)) { const normalized=upper(clean), label=names.find(name=>normalized.startsWith(name+' ')), remainder=label?clean.slice(label.length).trim():''; if (label && !/^[A-ZÀ-ÖØ-Þ]/u.test(remainder) && /^(?:obedece|entrega|pega|desce|sobe|entra|sai|olha|fala|diz|faz|volta|abre|fecha|anda|corre|começa|termina|afaga|grita|chora|ri|mata|morre|se transforma)\b/i.test(remainder)) return true; }
     return false;
   };
   for (const row of meaningful) {
@@ -72,6 +72,8 @@ window.parseScriptText = function parseScriptText(raw) {
     if (!scene) continue;
     if (text.startsWith('RÚBRICA:') || text.startsWith('RUBRICA:')) { push('rubric', text.replace(/^R[ÚU]BRICA:\s*/i, '')); speaker = null; currentLine = null; continue; }
     if (/^[([{].*[)\]}]$/.test(text) || /^\*.*\*$/.test(text)) { push('rubric', text.replace(/^[([{*]|[)\]}*]$/g, '')); speaker = null; currentLine = null; continue; }
+    const shortPuxador=text.match(/^PUXADOR\s+(.+)$/i);
+    if (shortPuxador && (known.has('PUXADOR DE SAMBA') || !known.size)) { speaker='PUXADOR DE SAMBA'; known.add(speaker); push('dialogue',shortPuxador[1],speaker); continue; }
     if (isRubric(text)) { push('rubric', text); speaker = null; currentLine = null; continue; }
     let m = text.match(dashRe) || text.match(colonRe);
     if (m && (!known.size || known.has(upper(m[1])))) {
