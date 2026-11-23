@@ -1,1 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#153b36"/><path d="M256 73 299 199 431 199 324 276 365 403 256 325 147 403 188 276 81 199 213 199Z" fill="#a9d641" stroke="#f4f1e6" stroke-width="13" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <path id="tile" d="M185 65h130c66 0 120 54 120 120v130c0 66-54 120-120 120H99c-19 0-34-15-34-34V185c0-66 54-120 120-120z"/>
+  </defs>
+  <g transform="rotate(-4 256 256)">
+    <use href="#tile" x="16" y="16" fill="#153b36"/>
+    <use href="#tile" fill="#a9d641"/>
+    <path d="m256 166 25 65 65 25-65 25-25 65-25-65-65-25 65-25z" fill="#182323"/>
+  </g>
+</svg>
