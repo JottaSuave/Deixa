@@ -1,27 +1,45 @@
-/* Text parser adapted from Cenograma Beta 0.49.125's script import flow. */
-window.parseScriptText = function parseScriptText(raw) {
+/* Text parsing engine. Script-specific text and reusable conventions stay outside this file. */
+window.parseScriptText = function parseScriptText(raw, options = {}) {
+  const profiles = window.SCRIPT_PARSER_PROFILES || { defaultProfileId: 'pt-br-theatre-v1', profiles: {} };
+  const profileId = options.profileId || profiles.defaultProfileId;
+  const profile = profiles.profiles?.[profileId] || {};
+  if (options.profileId && !profiles.profiles?.[profileId]) throw new Error(`Perfil de leitura não registrado: ${profileId}.`);
   const input = String(raw || '').replace(/\r/g, '').split('\n');
   const rows = input.map((text, index) => ({ text, trim: text.trim(), index })).filter(row => row.trim);
   if (!rows.length) throw new Error('O arquivo não contém texto de roteiro.');
   const normalize = value => String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim();
   const upper = value => normalize(value).toLocaleUpperCase('pt-BR');
-  const sceneRe = /^(?:CENA|ATO|QUADRO|SCENE|ACT)(?:\s+([IVXLCDM]+|\d+)\b|\s*[:.\-–—])\s*(.*)$/i;
+  const escapeRegex = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const scenePrefixes = profile.sceneHeadings?.length ? profile.sceneHeadings : ['CENA', 'ATO', 'QUADRO', 'SCENE', 'ACT'];
+  const sceneRe = new RegExp('^(?:' + scenePrefixes.map(escapeRegex).join('|') + ')(?:\\s+([IVXLCDM]+|\\d+)\\b|\\s*[:.\\-–—])\\s*(.*)$', 'i');
+  const castSectionEndRe = new RegExp('^(?:' + (profile.castSectionEndPatterns || ['Pré-Carnaval', 'Segunda-feira']).map(escapeRegex).join('|') + ')', 'i');
+  const columnLayoutTitleRe = new RegExp(profile.columnLayoutTitlePattern || 'RETRATO[- ]FALADO', 'i');
+  const pageBreakMarker = profile.layoutMarkers?.pageBreak || '\u200C';
+  const secondColumnMarker = profile.layoutMarkers?.secondColumn || '\u200B\u200B';
   const momentRe = /^(?:MOMENTO\s+CÊNICO|MOMENTO\s+CENICO|MC)\s+([A-Z0-9]+)(?:\s*[:.\-–—]\s*(.*))?$/i;
   const dashRe = /^([A-ZÀ-ÖØ-Þ0-9][A-ZÀ-ÖØ-Þ0-9 _'.\-]{0,54}?)\s*[–—-]\s*(.+)$/u;
   const colonRe = /^([A-ZÀ-ÖØ-Þ0-9][A-ZÀ-ÖØ-Þ0-9 _'.\-]{0,54}?)\s*:\s*(.+)$/u;
   const upperLine = /^[A-ZÀ-ÖØ-Þ0-9][A-ZÀ-ÖØ-Þ0-9 _'.\-]{0,60}$/u;
+  const aliases = profile.speakerAliases || [];
+  const canonicalSpeaker = value => {
+    const normalized = upper(value);
+    const alias = aliases.find(item => [item.canonical, ...(item.aliases || [])].some(name => upper(name) === normalized));
+    return alias ? upper(alias.canonical) : normalized;
+  };
+  const castHeadings = (profile.castSectionHeadings || ['PERSONAGENS']).map(upper);
+  const sceneListHeadings = (profile.sceneListSectionHeadings || ['CENAS']).map(upper);
   const known = new Set(), sceneTitles = new Map();
   let section = '';
   for (const row of rows) {
     const text = row.trim;
-    if (/^PERSONAGENS$/i.test(text)) { section = 'characters'; continue; }
-    if (/^CENAS$/i.test(text)) { section = 'scenes'; continue; }
+    if (castHeadings.includes(upper(text.replace(/:$/, '')))) { section = 'characters'; continue; }
+    if (sceneListHeadings.includes(upper(text.replace(/:$/, '')))) { section = 'scenes'; continue; }
     const title = text.match(/^(\d+)\.\s+(.+)$/);
     if (section === 'scenes' && title) { sceneTitles.set(Number(title[1]), normalize(title[2])); continue; }
-    if (/^(?:CENA|ATO|QUADRO)\s+\d+/i.test(text)) break;
+    if (sceneRe.test(text)) break;
     if (section === 'characters') {
-      if (/^(?:CENA|ATO|QUADRO)\b/i.test(text) || /^(?:Pré-Carnaval|Segunda-feira)/i.test(text)) { section = ''; continue; }
-      if (text.length <= 60 && upperLine.test(text)) known.add(upper(text));
+      if (sceneRe.test(text) || castSectionEndRe.test(text)) { section = ''; continue; }
+      if (text.length <= 60 && upperLine.test(text)) known.add(canonicalSpeaker(text));
     }
   }
   const candidates = new Set(known);
@@ -29,15 +47,15 @@ window.parseScriptText = function parseScriptText(raw) {
   const meaningful = firstScene >= 0 ? rows.slice(firstScene) : rows;
   for (const row of meaningful) {
     const text = row.trim, matched = text.match(dashRe) || text.match(colonRe);
-    if (matched) candidates.add(upper(matched[1]));
-    if (text.length <= 48 && upperLine.test(text) && !/[.!?]/.test(text) && !sceneRe.test(text) && !momentRe.test(text)) candidates.add(upper(text));
+    if (matched) candidates.add(canonicalSpeaker(matched[1]));
+    if (text.length <= 48 && upperLine.test(text) && !/[.!?]/.test(text) && !sceneRe.test(text) && !momentRe.test(text)) candidates.add(canonicalSpeaker(text));
   }
   const names = [...candidates].sort((a, b) => b.length - a.length);
   const repairedMeaningful = [];
   for (let i = 0; i < meaningful.length; i++) {
     const row = meaningful[i], first = upper(row.trim);
     let repaired = false;
-    for (const name of [...known].sort((a, b) => b.length - a.length)) {
+    for (const name of (profile.wrappedSpeakerNamesFromCastList === false ? [] : [...known]).sort((a, b) => b.length - a.length)) {
       const words = name.split(' ');
       for (let cut = 1; cut < words.length; cut++) {
         if (first !== words.slice(0, cut).join(' ')) continue;
@@ -73,19 +91,19 @@ window.parseScriptText = function parseScriptText(raw) {
     const line = { type, speaker: type === 'rubric' ? '' : (name || speaker || ''), text: normalize(text), page, column };
     scene.lines.push(line); currentLine = line; return line;
   };
+  const rubricLabelRe = new RegExp(profile.rubricLabelPattern || '^R[ÚU]BRICA:', 'i');
+  const stageDirectionRe = new RegExp('^(?:' + (profile.stageDirectionPatterns || ['ouve(?:-se)?', 'escuta-se', 'saca', 'atira', 'cai morto', 'silêncio', 'escuridão', 'blackout', 'fim']).join('|') + ')\\b', 'i');
   const isRubric = text => {
     const clean = normalize(text).replace(/\s+([.,!?;:])/g, '$1');
-    if (/^(?:RÚBRICA|RUBRICA)\s*:/i.test(clean) || /^[([{].*[)\]}]$/.test(clean)) return true;
-    if (/^(?:OUVE-SE|ESCUTA-SE|A PESSOA SAI\b|ELA VAI SAIR E DÁ DE CARA\b)/i.test(clean)) return true;
-    if (/^(?:ouve(?:-se)?|escuta-se|saca|atira|cai morto|gargalha(?:m)?|deixa o rei momo|chupa|é arrastado|entra maldoror|examina|mata a vidente|está dando comida|e outra mulher urinam|aponta a faca|arranca o rosto|beija mervino|atravessa as ruas|arrasta o saco)\b/i.test(clean)) return true;
-    if (/^(?:Silêncio|Escuridão|Blackout|Fim)\b/i.test(clean)) return true;
+    if (rubricLabelRe.test(clean) || /^[([{].*[)\]}]$/.test(clean)) return true;
+    if (stageDirectionRe.test(clean)) return true;
     if (currentLine?.type === 'dialogue' && !/[—:]/.test(clean)) { const normalized=upper(clean), label=names.find(name=>normalized.startsWith(name+' ')), remainder=label?clean.slice(label.length).trim():''; if (label && !/^[A-ZÀ-ÖØ-Þ]/u.test(remainder) && /^(?:obedece|entrega|pega|desce|sobe|entra|sai|olha|fala|diz|faz|volta|abre|fecha|anda|corre|começa|termina|afaga|grita|chora|ri|mata|morre|se transforma)\b/i.test(remainder)) return true; }
     return false;
   };
   for (const row of meaningful) {
     let text = row.trim;
-    if (text.includes('\u200C')) { page++; column = 1; speaker = null; currentLine = null; continue; }
-    if (text.includes('\u200B\u200B')) { column = 2; speaker = null; currentLine = null; continue; }
+    if (text.includes(pageBreakMarker)) { page++; column = 1; speaker = null; currentLine = null; continue; }
+    if (text.includes(secondColumnMarker)) { column = 2; speaker = null; currentLine = null; continue; }
     if (pendingTitle) {
       const sceneNo = Number(scene?.number), expected = sceneTitles.get(sceneNo);
       if ((expected && upper(expected) === upper(text)) || (!known.has(upper(text)) && upperLine.test(text) && !/[—:]/.test(text))) {
@@ -101,16 +119,21 @@ window.parseScriptText = function parseScriptText(raw) {
       continue;
     }
     if (!scene) continue;
-    if (/^R[ÚU]BRICA:/i.test(text)) { push('rubric', text.replace(/^R[ÚU]BRICA:\s*/i, '')); speaker = null; currentLine = null; continue; }
+    if (rubricLabelRe.test(text)) { push('rubric', text.replace(rubricLabelRe, '').trim()); speaker = null; currentLine = null; continue; }
     if (/^[([{].*[)\]}]$/.test(text) || /^\*.*\*$/.test(text)) { push('rubric', text.replace(/^[([{*]|[)\]}*]$/g, '')); speaker = null; currentLine = null; continue; }
-    const shortPuxador=text.match(/^PUXADOR\s+(.+)$/i);
-    if (shortPuxador && (known.has('PUXADOR DE SAMBA') || !known.size)) { speaker='PUXADOR DE SAMBA'; known.add(speaker); push('dialogue',shortPuxador[1],speaker); continue; }
+    let inlineSpeaker = null;
+    for (const rule of profile.inlineSpeakerLabels || []) {
+      const found = text.match(new RegExp('^' + escapeRegex(rule.label) + '\\s+(.+)$', 'i'));
+      const canonical = canonicalSpeaker(rule.canonical);
+      if (found && (known.has(canonical) || !known.size)) { inlineSpeaker = { speaker: canonical, text: found[1] }; break; }
+    }
+    if (inlineSpeaker) { speaker = inlineSpeaker.speaker; known.add(speaker); push('dialogue', inlineSpeaker.text, speaker); continue; }
     if (isRubric(text)) { push('rubric', text); speaker = null; currentLine = null; continue; }
     let m = text.match(dashRe) || text.match(colonRe);
-    if (m && (!known.size || known.has(upper(m[1])))) {
-      speaker = upper(m[1]); known.add(speaker); push('dialogue', m[2], speaker); continue;
+    if (m && (!known.size || known.has(canonicalSpeaker(m[1])))) {
+      speaker = canonicalSpeaker(m[1]); known.add(speaker); push('dialogue', m[2], speaker); continue;
     }
-    const header = upper(text.replace(/:$/, ''));
+    const header = canonicalSpeaker(text.replace(/:$/, ''));
     if (candidates.has(header) && text.length <= 48 && !/[.!?]/.test(text)) { speaker = header; known.add(speaker); currentLine = null; continue; }
     let prefix = null;
     for (const name of names) {
@@ -121,9 +144,9 @@ window.parseScriptText = function parseScriptText(raw) {
       if (found) { prefix = { name, text: normalize(text.slice(name.length)) }; break; }
     }
     if (prefix) { speaker = prefix.name; known.add(speaker); push('dialogue', prefix.text, speaker); continue; }
-    if (currentLine?.type === 'dialogue' && currentLine.column === column && /^[a-zà-ÿ0-9…]/.test(text)) { currentLine.text += ' ' + normalize(text); continue; }
-    if (currentLine?.type === 'dialogue' && speaker && !/[.!?]$/.test(currentLine.text)) { currentLine.text += ' ' + normalize(text); continue; }
-    if (/RETRATO[- ]FALADO/i.test(scene.title)) {
+    if (profile.carryUnlabelledContinuation !== false && currentLine?.type === 'dialogue' && currentLine.column === column && /^[a-zà-ÿ0-9…]/.test(text)) { currentLine.text += ' ' + normalize(text); continue; }
+    if (profile.carryUnlabelledContinuation !== false && currentLine?.type === 'dialogue' && speaker && !/[.!?]$/.test(currentLine.text)) { currentLine.text += ' ' + normalize(text); continue; }
+    if (columnLayoutTitleRe.test(scene.title)) {
       const raw = text.replace(/^[—–-]\s*/, '');
       if (raw) { speaker = `VOZ ${column}`; push('dialogue', raw, speaker); continue; }
     }
@@ -134,15 +157,19 @@ window.parseScriptText = function parseScriptText(raw) {
     for (const line of sc.lines) {
       const text = normalize(line.text);
       const previous = repaired[repaired.length - 1];
-      const isDirection = /^(?:ouve(?:-se)?|escuta-se|saca|atira|cai morto|gargalha(?:m)?|deixa o rei momo|chupa|é arrastado|entra maldoror|examina|mata a vidente|está dando comida|e outra mulher urinam|aponta a faca|arranca o rosto|beija mervino|atravessa as ruas|arrasta o saco)\b/i.test(text);
-      if (line.type === 'rubric' && !isDirection && /^[a-zà-ÿ0-9…]/u.test(text) && previous?.type === 'dialogue') {
+      const isDirection = stageDirectionRe.test(text);
+      if (profile.carryUnlabelledContinuation !== false && line.type === 'rubric' && !isDirection && /^[a-zà-ÿ0-9…]/u.test(text) && previous?.type === 'dialogue') {
         previous.text = `${previous.text} ${text}`;
       } else repaired.push(line);
     }
     sc.lines = repaired;
     const hasLeft = sc.lines.some(line => line.column === 1), hasRight = sc.lines.some(line => line.column === 2);
-    if (/RETRATO[- ]FALADO/i.test(sc.title) && hasLeft && hasRight) sc.lines.forEach(line => { line.simultaneousGroup = `sim-${sc.number}`; });
+    if (columnLayoutTitleRe.test(sc.title) && hasLeft && hasRight) sc.lines.forEach(line => { line.simultaneousGroup = `sim-${sc.number}`; });
   }
   if (!scenes.length) throw new Error('Não encontrei cenas reconhecíveis no arquivo.');
-  return { title: '', characters: [...known], scenes };
+  return {
+    schemaVersion: 1,
+    parser: { engine: 'deixa-script-parser', engineVersion: '1.1.0', profileId, profileVersion: profile.version || 1 },
+    title: '', characters: [...known], scenes
+  };
 };
