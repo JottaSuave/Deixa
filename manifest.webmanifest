@@ -1,0 +1,31 @@
+{
+  "name": "DEIXA! — Jogo de falas",
+  "short_name": "DEIXA!",
+  "description": "Pratique e memorize suas falas de teatro.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f1e6",
+  "theme_color": "#153b36",
+  "icons": [
+    {
+      "src": "./assets/deixa-app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/deixa-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/deixa-app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
