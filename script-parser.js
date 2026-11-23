@@ -33,6 +33,35 @@ window.parseScriptText = function parseScriptText(raw) {
     if (text.length <= 48 && upperLine.test(text) && !/[.!?]/.test(text) && !sceneRe.test(text) && !momentRe.test(text)) candidates.add(upper(text));
   }
   const names = [...candidates].sort((a, b) => b.length - a.length);
+  const repairedMeaningful = [];
+  for (let i = 0; i < meaningful.length; i++) {
+    const row = meaningful[i], first = upper(row.trim);
+    let repaired = false;
+    for (const name of [...known].sort((a, b) => b.length - a.length)) {
+      const words = name.split(' ');
+      for (let cut = 1; cut < words.length; cut++) {
+        if (first !== words.slice(0, cut).join(' ')) continue;
+        const tail = words.slice(cut).join(' ');
+        let collected = '', consumed = 0;
+        while (i + 1 + consumed < meaningful.length) {
+          const next = normalize(meaningful[i + 1 + consumed].trim);
+          if (/[\u200c\u200b]/.test(next)) break;
+          collected = `${collected} ${next}`.trim(); consumed++;
+          const upperCollected = upper(collected);
+          if (upperCollected === tail || upperCollected.startsWith(`${tail} `)) {
+            const remainder = collected.slice(tail.length).trim();
+            repairedMeaningful.push({ ...row, trim: `${name}${remainder ? ` ${remainder}` : ''}` });
+            i += consumed; repaired = true; break;
+          }
+          if (!tail.startsWith(`${upperCollected} `)) break;
+        }
+        if (repaired) break;
+      }
+      if (repaired) break;
+    }
+    if (!repaired) repairedMeaningful.push(row);
+  }
+  meaningful.splice(0, meaningful.length, ...repairedMeaningful);
   const scenes = [];
   let scene = null, pendingTitle = false, speaker = null, currentLine = null, page = 0, column = 1;
   const addScene = (number, title) => {
@@ -47,6 +76,8 @@ window.parseScriptText = function parseScriptText(raw) {
   const isRubric = text => {
     const clean = normalize(text).replace(/\s+([.,!?;:])/g, '$1');
     if (/^(?:RÚBRICA|RUBRICA)\s*:/i.test(clean) || /^[([{].*[)\]}]$/.test(clean)) return true;
+    if (/^(?:OUVE-SE|ESCUTA-SE|A PESSOA SAI\b|ELA VAI SAIR E DÁ DE CARA\b)/i.test(clean)) return true;
+    if (/^(?:ouve(?:-se)?|escuta-se|saca|atira|cai morto|gargalha(?:m)?|deixa o rei momo|chupa|é arrastado|entra maldoror|examina|mata a vidente|está dando comida|e outra mulher urinam|aponta a faca|arranca o rosto|beija mervino|atravessa as ruas|arrasta o saco)\b/i.test(clean)) return true;
     if (/^(?:Silêncio|Escuridão|Blackout|Fim)\b/i.test(clean)) return true;
     if (currentLine?.type === 'dialogue' && !/[—:]/.test(clean)) { const normalized=upper(clean), label=names.find(name=>normalized.startsWith(name+' ')), remainder=label?clean.slice(label.length).trim():''; if (label && !/^[A-ZÀ-ÖØ-Þ]/u.test(remainder) && /^(?:obedece|entrega|pega|desce|sobe|entra|sai|olha|fala|diz|faz|volta|abre|fecha|anda|corre|começa|termina|afaga|grita|chora|ri|mata|morre|se transforma)\b/i.test(remainder)) return true; }
     return false;
@@ -70,7 +101,7 @@ window.parseScriptText = function parseScriptText(raw) {
       continue;
     }
     if (!scene) continue;
-    if (text.startsWith('RÚBRICA:') || text.startsWith('RUBRICA:')) { push('rubric', text.replace(/^R[ÚU]BRICA:\s*/i, '')); speaker = null; currentLine = null; continue; }
+    if (/^R[ÚU]BRICA:/i.test(text)) { push('rubric', text.replace(/^R[ÚU]BRICA:\s*/i, '')); speaker = null; currentLine = null; continue; }
     if (/^[([{].*[)\]}]$/.test(text) || /^\*.*\*$/.test(text)) { push('rubric', text.replace(/^[([{*]|[)\]}*]$/g, '')); speaker = null; currentLine = null; continue; }
     const shortPuxador=text.match(/^PUXADOR\s+(.+)$/i);
     if (shortPuxador && (known.has('PUXADOR DE SAMBA') || !known.size)) { speaker='PUXADOR DE SAMBA'; known.add(speaker); push('dialogue',shortPuxador[1],speaker); continue; }
@@ -99,6 +130,16 @@ window.parseScriptText = function parseScriptText(raw) {
     if (speaker) push('dialogue', text, speaker); else push('rubric', text);
   }
   for (const sc of scenes) {
+    const repaired = [];
+    for (const line of sc.lines) {
+      const text = normalize(line.text);
+      const previous = repaired[repaired.length - 1];
+      const isDirection = /^(?:ouve(?:-se)?|escuta-se|saca|atira|cai morto|gargalha(?:m)?|deixa o rei momo|chupa|é arrastado|entra maldoror|examina|mata a vidente|está dando comida|e outra mulher urinam|aponta a faca|arranca o rosto|beija mervino|atravessa as ruas|arrasta o saco)\b/i.test(text);
+      if (line.type === 'rubric' && !isDirection && /^[a-zà-ÿ0-9…]/u.test(text) && previous?.type === 'dialogue') {
+        previous.text = `${previous.text} ${text}`;
+      } else repaired.push(line);
+    }
+    sc.lines = repaired;
     const hasLeft = sc.lines.some(line => line.column === 1), hasRight = sc.lines.some(line => line.column === 2);
     if (/RETRATO[- ]FALADO/i.test(sc.title) && hasLeft && hasRight) sc.lines.forEach(line => { line.simultaneousGroup = `sim-${sc.number}`; });
   }
