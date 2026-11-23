@@ -3,8 +3,9 @@
     <path id="tile" d="M185 65h130c66 0 120 54 120 120v130c0 66-54 120-120 120H99c-19 0-34-15-34-34V185c0-66 54-120 120-120z"/>
   </defs>
   <g transform="rotate(-4 256 256)">
-    <use href="#tile" x="16" y="16" fill="#153b36"/>
+    <use href="#tile" x="34" y="34" fill="#153b36"/>
     <use href="#tile" fill="#a9d641"/>
     <path d="m256 166 25 65 65 25-65 25-25 65-25-65-65-25 65-25z" fill="#182323"/>
   </g>
 </svg>
+
