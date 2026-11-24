@@ -148,7 +148,7 @@ window.parseScriptText = function parseScriptText(raw, options = {}) {
     if (profile.carryUnlabelledContinuation !== false && currentLine?.type === 'dialogue' && speaker && !/[.!?]$/.test(currentLine.text)) { currentLine.text += ' ' + normalize(text); continue; }
     if (columnLayoutTitleRe.test(scene.title)) {
       const raw = text.replace(/^[—–-]\s*/, '');
-      if (raw) { speaker = `VOZ ${column}`; push('dialogue', raw, speaker); continue; }
+      if (raw) { speaker = canonicalSpeaker(profile.columnLayoutCollectiveSpeaker || `VOZ ${column}`); push('dialogue', raw, speaker); continue; }
     }
     if (speaker) push('dialogue', text, speaker); else push('rubric', text);
   }

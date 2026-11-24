@@ -27,6 +27,7 @@ window.SCRIPT_PARSER_PROFILES = {
       carryUnlabelledContinuation: true,
       rubricLabelPattern: '^R[ÚU]BRICA:',
       columnLayoutTitlePattern: 'RETRATO[- ]FALADO',
+      columnLayoutCollectiveSpeaker: 'O POVO',
       stageDirectionPatterns: [
         'OUVE-SE', 'ESCUTA-SE', 'A PESSOA SAI\\b', 'ELA VAI SAIR E DÁ DE CARA\\b',
         'ouve(?:-se)?', 'escuta-se', 'saca', 'atira', 'cai morto', 'gargalha(?:m)?',
@@ -44,7 +45,9 @@ window.SCRIPT_PARSER_PROFILES = {
         'PDF line wraps can split a multiword speaker name; join only when the full name is confirmed by the cast list.',
         'PUXADOR is an established short label for PUXADOR DE SAMBA.',
         'An unlabelled continuation may belong to the active speaker; stage directions reset speaker context.',
-        'Treat title-like uppercase lines as speaker labels only when they match the cast list or a clear label pattern.'
+        'Treat title-like uppercase lines as speaker labels only when they match the cast list or a clear label pattern.',
+        'In a RETRATO-FALADO scene, parallel unlabelled statements form the collective voice O POVO; keep column and source order.',
+        'A character mentioned inside a speech is not automatically its speaker; use the explicit heading or the active narrative voice.'
       ]
     }
   }

@@ -27,7 +27,7 @@ Os baralhos usam `schemaVersion: 1` e esta estrutura principal:
 }
 ```
 
-`page`, `column` e, quando necessário, `simultaneousGroup` preservam contexto útil do documento. Baralhos antigos recebem valores padrão ao serem carregados.
+`page`, `column`, `layoutY` e, quando necessário, `simultaneousGroup` preservam contexto útil do documento. `layoutY` é uma posição vertical relativa à página, usada quando o texto precisa ser reconstruído visualmente; a ordem das falas deve acompanhar primeiro a página e depois a altura, mantendo cada coluna registrada. Baralhos antigos recebem valores padrão ao serem carregados.
 
 ## Convenções reaproveitadas do Dramaturgia LAB 08
 
@@ -40,7 +40,8 @@ O perfil `pt-br-theatre-v1` registra padrões, não o elenco obrigatório do pr�
 - manter nomes compostos como `ALGUÉM QUE IA PASSANDO` como uma identidade única quando aparecem no elenco;
 - carregar continuação sem novo rótulo com o personagem atual, mas reiniciar o contexto ao detectar rubrica;
 - reconhecer marcações de rubrica e ações frequentes;
-- preservar quebras de página, colunas e cenas em formato de retrato-falado.
+- preservar quebras de página, colunas e cenas em formato de retrato-falado;
+- em cenas de retrato-falado, atribuir declarações sem rubrica de personagem à voz coletiva `O POVO`, preservando a coluna; uma pessoa citada dentro de uma fala não deve ser inferida como quem fala.
 
 Os exemplos de nomes servem para documentar os problemas de diagramação já encontrados. O parser só trata um nome como personagem quando ele é reconhecido no roteiro importado ou por uma regra de alias explícita.
 
